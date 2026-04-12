@@ -1,0 +1,45 @@
+name: distill_anything
+description: Personal Context Management — record daily life, distill into knowledge.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Audio recording
+  record: ^5.1.2
+  # Camera
+  camera: ^0.11.0+2
+  # Local database
+  sqflite: ^2.4.1
+  path_provider: ^2.1.5
+  path: ^1.9.0
+  # HTTP client
+  dio: ^5.7.0
+  # State management
+  provider: ^6.1.2
+  # Foreground service
+  flutter_foreground_task: ^8.12.0
+  # Permissions
+  permission_handler: ^11.3.1
+  # UUID generation
+  uuid: ^4.5.1
+  # Checksum
+  crypto: ^3.0.6
+  # Date formatting
+  intl: ^0.19.0
+  # Persistent settings
+  shared_preferences: ^2.3.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  mockito: ^5.4.4
+  build_runner: ^2.4.13
+
+flutter:
+  uses-material-design: true

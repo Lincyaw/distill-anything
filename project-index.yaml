@@ -1,0 +1,355 @@
+project:
+  name: distill-anything
+  languages: [dart, python]
+  description: >
+    Personal Context Management — continuously record life events
+    (audio, photo, video, text), store as timeline event log,
+    convert to Obsidian-compatible knowledge base organized by topic.
+    LAN-only, fully self-hosted.
+
+requirements:
+  # ============================================================
+  # Client — Core Recording (P0)
+  # ============================================================
+
+  - id: REQ-001
+    title: Continuous background audio recording
+    description: >
+      App records audio continuously in the background without user interaction.
+      Recording persists across screen lock and app minimization.
+      Must handle Android audio focus and foreground service requirements.
+    priority: P0
+    status: active
+    code: [client/lib/services/audio_recording_service.dart]
+    tests: []
+    docs: []
+    depends_on: []
+
+  - id: REQ-002
+    title: Manual start/stop recording
+    description: >
+      User can manually start and stop audio recording via a clear UI control.
+      Visual indicator shows recording state (active/paused/stopped).
+    priority: P0
+    status: active
+    code: [client/lib/services/audio_recording_service.dart, client/lib/widgets/recording_controls.dart]
+    tests: []
+    docs: []
+    depends_on: []
+
+  - id: REQ-003
+    title: Scheduled recording (alarm-style)
+    description: >
+      User sets start time and end time for recording sessions.
+      App begins recording at the scheduled start and stops at the scheduled end,
+      similar to an alarm clock. Supports recurring schedules (e.g., every weekday 9am-6pm).
+    priority: P0
+    status: active
+    code: [client/lib/services/schedule_service.dart]
+    tests: []
+    docs: []
+    depends_on: [REQ-001]
+
+  - id: REQ-004
+    title: Photo capture
+    description: >
+      User can take photos via the app. Each photo is stored as an event
+      with timestamp and optional text annotation.
+    priority: P0
+    status: active
+    code: [client/lib/services/photo_capture_service.dart]
+    tests: []
+    docs: []
+    depends_on: []
+
+  - id: REQ-005
+    title: Video capture
+    description: >
+      User can record video clips. Each video is stored as an event
+      with timestamp and optional text annotation.
+      Supports manual start/stop.
+    priority: P0
+    status: active
+    code: [client/lib/services/video_capture_service.dart]
+    tests: []
+    docs: []
+    depends_on: []
+
+  - id: REQ-006
+    title: Text input
+    description: >
+      User can type text notes at any time. Each note is stored as
+      an event with timestamp. Supports quick-entry mode
+      (minimal UI friction — open app, type, done).
+    priority: P0
+    status: active
+    code: [client/lib/services/text_input_service.dart, client/lib/screens/text_input_screen.dart]
+    tests: []
+    docs: []
+    depends_on: []
+
+  # ============================================================
+  # Client — Storage & Reliability (P0)
+  # ============================================================
+
+  - id: REQ-007
+    title: Local event storage
+    description: >
+      All captured events (audio, photo, video, text) are stored locally
+      on-device as a time-ordered event sequence. Each event has:
+      type, timestamp, payload path (for media) or content (for text),
+      optional annotation. Storage must be reliable — no data loss
+      on app crash or unexpected termination.
+    priority: P0
+    status: active
+    code: [client/lib/services/event_storage_service.dart, client/lib/models/event.dart]
+    tests: [client/test/services/event_storage_service_test.dart, client/test/models/event_test.dart]
+    docs: []
+    depends_on: []
+
+  - id: REQ-008
+    title: LAN upload to server
+    description: >
+      Client uploads events to the server over LAN (no public internet).
+      User configures server address (IP:port) once.
+      Upload is reliable: retry on failure, resume after network interruption.
+      Track upload status per event (pending/uploading/uploaded/failed).
+    priority: P0
+    status: active
+    code: [client/lib/services/upload_service.dart, client/lib/providers/upload_provider.dart]
+    tests: [client/test/services/upload_service_test.dart]
+    docs: []
+    depends_on: [REQ-007]
+
+  - id: REQ-009
+    title: Data integrity verification
+    description: >
+      After upload, verify data integrity by comparing checksums
+      (client-side vs server-side). Mark events as verified only
+      after checksum match. Alert on mismatch.
+    priority: P0
+    status: active
+    code: [client/lib/services/checksum_service.dart, client/lib/services/upload_service.dart, server/src/distill_anything/services/checksum.py]
+    tests: [client/test/services/checksum_service_test.dart, server/tests/test_checksum.py]
+    docs: []
+    depends_on: [REQ-008]
+
+  # ============================================================
+  # Client — Long-running Stability (P0)
+  # ============================================================
+
+  - id: REQ-010
+    title: Android foreground service
+    description: >
+      Recording runs as an Android foreground service with persistent
+      notification. Prevents OS from killing the app during recording.
+      Handles doze mode and battery optimization gracefully.
+    priority: P0
+    status: active
+    code: [client/lib/services/foreground_service.dart]
+    tests: []
+    docs: []
+    depends_on: [REQ-001]
+
+  - id: REQ-011
+    title: Storage management
+    description: >
+      Monitor local storage usage. Warn user when storage is low.
+      After successful upload + verification, optionally clean up
+      local copies (user-configurable retention policy).
+    priority: P1
+    status: active
+    code: [client/lib/services/storage_manager_service.dart, client/lib/widgets/storage_indicator.dart]
+    tests: []
+    docs: []
+    depends_on: [REQ-007, REQ-009]
+
+  # ============================================================
+  # Server — Ingestion (P0)
+  # ============================================================
+
+  - id: REQ-012
+    title: Event ingestion API
+    description: >
+      REST API to receive events from client. Accepts multipart uploads
+      (media files + metadata JSON). Stores raw files on disk,
+      event metadata in database. Returns checksum for verification.
+      Endpoint: POST /api/events
+    priority: P0
+    status: active
+    code: [server/src/distill_anything/api/events.py, server/src/distill_anything/api/health.py]
+    tests: [server/tests/test_events_api.py]
+    docs: []
+    depends_on: []
+
+  - id: REQ-013
+    title: Raw event storage
+    description: >
+      Store raw events as a time-ordered log. Each event record contains:
+      id, type (audio/photo/video/text), timestamp, raw_file_path,
+      text_content (for text events), checksum, processing_status.
+      Storage layout: organized by date (YYYY/MM/DD/).
+    priority: P0
+    status: active
+    code: [server/src/distill_anything/services/storage.py, server/src/distill_anything/models/event.py, server/src/distill_anything/services/database.py]
+    tests: [server/tests/test_storage.py, server/tests/test_models.py]
+    docs: []
+    depends_on: [REQ-012]
+
+  # ============================================================
+  # Server — Conversion (P1)
+  # ============================================================
+
+  - id: REQ-014
+    title: Audio-to-text transcription
+    description: >
+      Transcribe audio recordings to text using Ali open-source models
+      (e.g., FunASR/Paraformer). Process asynchronously after ingestion.
+      Store transcription result alongside the original audio event.
+      Must handle long recordings (hours) by chunking.
+    priority: P1
+    status: active
+    code: [server/src/distill_anything/services/transcription.py, server/src/distill_anything/services/processing_worker.py]
+    tests: [server/tests/test_processing.py]
+    docs: []
+    depends_on: [REQ-013]
+
+  - id: REQ-015
+    title: Video-to-text extraction
+    description: >
+      Extract audio track from video, transcribe to text.
+      Optionally extract key frames for visual context.
+      Store results alongside the original video event.
+    priority: P1
+    status: active
+    code: [server/src/distill_anything/services/video_extraction.py, server/src/distill_anything/services/processing_worker.py]
+    tests: [server/tests/test_processing.py]
+    docs: []
+    depends_on: [REQ-013, REQ-014]
+
+  - id: REQ-016
+    title: Image description
+    description: >
+      Generate text description of photos using vision model.
+      Store description alongside the original photo event.
+    priority: P1
+    status: active
+    code: [server/src/distill_anything/services/image_description.py, server/src/distill_anything/services/processing_worker.py]
+    tests: [server/tests/test_processing.py]
+    docs: []
+    depends_on: [REQ-013]
+
+  # ============================================================
+  # Server — Knowledge Base (P1)
+  # ============================================================
+
+  - id: REQ-017
+    title: Event timeline log
+    description: >
+      Maintain a chronological event log in Obsidian-compatible markdown.
+      Raw timeline format — one entry per event, ordered by timestamp.
+      Format: daily log files (YYYY-MM-DD.md) with event entries.
+    priority: P1
+    status: active
+    code: [server/src/distill_anything/services/timeline.py, server/src/distill_anything/api/knowledge_base.py]
+    tests: [server/tests/test_timeline.py]
+    docs: []
+    depends_on: [REQ-013]
+
+  - id: REQ-018
+    title: Topic-based note aggregation
+    description: >
+      Aggregate events into topic-based Obsidian notes using LLM.
+      Analyze transcribed/described events, identify topics,
+      create or update topic notes with relevant content.
+      Use Obsidian wiki-links ([[topic]]) for cross-referencing.
+      Topic notes live in a structured folder hierarchy.
+    priority: P1
+    status: active
+    code: [server/src/distill_anything/services/topic_aggregation.py, server/src/distill_anything/knowledge_base/writer.py, server/src/distill_anything/knowledge_base/topic_manager.py, server/src/distill_anything/api/knowledge_base.py]
+    tests: [server/tests/test_knowledge_base.py]
+    docs: []
+    depends_on: [REQ-014, REQ-017]
+
+  # ============================================================
+  # Client — UX (P1)
+  # ============================================================
+
+  - id: REQ-019
+    title: Recording mode switcher
+    description: >
+      Main UI provides easy switching between recording modes:
+      audio (continuous/manual/scheduled), photo, video, text.
+      Current active mode is clearly visible.
+    priority: P1
+    status: active
+    code: [client/lib/widgets/mode_switcher.dart, client/lib/screens/home_screen.dart, client/lib/providers/recording_provider.dart]
+    tests: []
+    docs: []
+    depends_on: [REQ-001, REQ-002, REQ-004, REQ-005, REQ-006]
+
+  - id: REQ-020
+    title: Event history view
+    description: >
+      Browse captured events in reverse-chronological order.
+      Filter by type (audio/photo/video/text).
+      Show upload status for each event.
+    priority: P1
+    status: active
+    code: [client/lib/screens/event_history_screen.dart, client/lib/widgets/event_list_item.dart, client/lib/providers/event_provider.dart]
+    tests: []
+    docs: []
+    depends_on: [REQ-007]
+
+  - id: REQ-021
+    title: Server connection settings
+    description: >
+      Settings page to configure server address (IP:port).
+      Connection test button to verify LAN connectivity.
+      Show connection status in main UI.
+    priority: P1
+    status: active
+    code: [client/lib/screens/settings_screen.dart, client/lib/widgets/connection_status.dart, client/lib/providers/settings_provider.dart]
+    tests: []
+    docs: []
+    depends_on: [REQ-008]
+
+  # ============================================================
+  # Deferred (P2) — post-MVP
+  # ============================================================
+
+  - id: REQ-022
+    title: Post-processing analysis
+    description: >
+      Advanced analysis on knowledge base: goal tracking,
+      behavior pattern extraction, actionable insights.
+    priority: P2
+    status: active
+    code: []
+    tests: []
+    docs: []
+    depends_on: [REQ-018]
+
+  - id: REQ-023
+    title: Multi-device support
+    description: >
+      Support recording from multiple devices simultaneously,
+      merging event streams on the server.
+    priority: P2
+    status: active
+    code: []
+    tests: []
+    docs: []
+    depends_on: [REQ-008, REQ-012]
+
+  - id: REQ-024
+    title: Web dashboard
+    description: >
+      Web interface for browsing the knowledge base,
+      viewing event timeline, managing topics.
+    priority: P2
+    status: active
+    code: []
+    tests: []
+    docs: []
+    depends_on: [REQ-017, REQ-018]

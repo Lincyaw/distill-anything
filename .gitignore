@@ -1,0 +1,36 @@
+# Flutter/Dart
+client/.dart_tool/
+client/.packages
+client/build/
+client/.flutter-plugins
+client/.flutter-plugins-dependencies
+client/pubspec.lock
+*.iml
+
+# Python
+server/.venv/
+server/__pycache__/
+server/src/**/__pycache__/
+server/tests/__pycache__/
+server/.pytest_cache/
+server/data/
+*.pyc
+*.pyo
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+*.apk
+*.aab
+*.ipa
+
+# Data
+data/
