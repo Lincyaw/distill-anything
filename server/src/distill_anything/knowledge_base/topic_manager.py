@@ -13,9 +13,13 @@ class TopicManager:
         self.topics_dir = topics_dir
         self.writer = MarkdownWriter()
 
+    @staticmethod
+    def _safe_name(topic_name: str) -> str:
+        return topic_name.replace("/", "-").replace("\\", "-")
+
     def get_or_create_topic(self, topic_name: str) -> Path:
         """Get existing topic file or create a new one."""
-        safe_name = topic_name.replace("/", "-").replace("\\", "-")
+        safe_name = self._safe_name(topic_name)
         topic_path = self.topics_dir / f"{safe_name}.md"
         if not topic_path.exists():
             self.writer.write_note(topic_path, topic_name, "", tags=[topic_name])
@@ -56,7 +60,7 @@ class TopicManager:
 
     def get_topic_content(self, topic_name: str) -> str | None:
         """Read topic file content. Returns None if topic doesn't exist."""
-        safe_name = topic_name.replace("/", "-").replace("\\", "-")
+        safe_name = self._safe_name(topic_name)
         topic_path = self.topics_dir / f"{safe_name}.md"
         if not topic_path.exists():
             return None

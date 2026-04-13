@@ -31,10 +31,11 @@ class StorageService:
 
     def delete_file(self, file_path: Path) -> bool:
         """Delete a stored file. Returns True if deleted."""
-        if file_path.exists():
+        try:
             file_path.unlink()
             return True
-        return False
+        except FileNotFoundError:
+            return False
 
     def get_storage_usage(self) -> int:
         """Return total bytes used by stored files."""

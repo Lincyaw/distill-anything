@@ -20,7 +20,9 @@ class VideoExtractionService:
 
     async def extract_audio(self, video_path: Path) -> Path:
         """Extract audio track from video using ffmpeg."""
-        output = Path(tempfile.mktemp(suffix=".wav"))
+        tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+        tmp.close()
+        output = Path(tmp.name)
         cmd = [
             "ffmpeg",
             "-i",

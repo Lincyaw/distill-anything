@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:camera/camera.dart';
@@ -53,14 +52,13 @@ class PhotoCaptureService {
     final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
     final destPath = p.join(dir.path, 'photo_$timestamp.jpg');
 
-    await File(xFile.path).copy(destPath);
-    // Clean up the temp file if it differs from our destination
-    if (xFile.path != destPath) {
+    try {
+      await File(xFile.path).rename(destPath);
+    } on FileSystemException {
+      await File(xFile.path).copy(destPath);
       try {
         await File(xFile.path).delete();
-      } catch (_) {
-        // Ignore cleanup errors
-      }
+      } catch (_) {}
     }
 
     return destPath;

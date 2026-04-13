@@ -8,15 +8,13 @@ import '../services/upload_service.dart';
 class SettingsProvider extends ChangeNotifier {
   final UploadService _uploadService;
   ServerConfig _config = const ServerConfig();
-  bool _isConnected = false;
-  DateTime? _lastChecked;
 
   SettingsProvider({UploadService? uploadService})
       : _uploadService = uploadService ?? UploadService();
 
   ServerConfig get config => _config;
-  bool get isConnected => _isConnected;
-  DateTime? get lastChecked => _lastChecked;
+  bool get isConnected => _config.isConnected;
+  DateTime? get lastChecked => _config.lastChecked;
 
   /// Update the server host address.
   void setHost(String host) {
@@ -52,13 +50,10 @@ class SettingsProvider extends ChangeNotifier {
 
   /// Test the connection to the configured server.
   Future<bool> testConnection() async {
-    _uploadService.updateConfig(_config);
     final connected = await _uploadService.testConnection();
-    _isConnected = connected;
-    _lastChecked = DateTime.now();
     _config = _config.copyWith(
       isConnected: connected,
-      lastChecked: _lastChecked,
+      lastChecked: DateTime.now(),
     );
     notifyListeners();
     return connected;

@@ -17,17 +17,17 @@ class ImageDescriptionService:
     def __init__(self, model_name: str | None = None) -> None:
         self.model_name = model_name or settings.vision_model
         self.base_url = settings.llm_base_url
+        self._client = None
+
+    def _get_client(self):
+        if self._client is None:
+            from openai import AsyncOpenAI
+            self._client = AsyncOpenAI(base_url=self.base_url, api_key="not-needed")
+        return self._client
 
     async def describe(self, image_path: Path, event_id: str) -> ImageDescriptionResult:
         """Generate a text description of an image."""
-        try:
-            from openai import AsyncOpenAI
-        except ImportError:
-            raise ImportError(
-                "openai package required. Install with: uv sync --extra conversion"
-            )
-
-        client = AsyncOpenAI(base_url=self.base_url, api_key="not-needed")
+        client = self._get_client()
 
         image_data = await asyncio.to_thread(image_path.read_bytes)
         base64_image = base64.b64encode(image_data).decode("utf-8")

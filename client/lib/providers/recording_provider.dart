@@ -10,7 +10,6 @@ import '../services/event_storage_service.dart';
 import '../services/foreground_service.dart';
 import '../services/photo_capture_service.dart';
 import '../services/schedule_service.dart';
-import '../services/text_input_service.dart';
 import '../services/video_capture_service.dart';
 import '../services/checksum_service.dart';
 
@@ -25,7 +24,6 @@ class RecordingProvider extends ChangeNotifier {
   AudioRecordingService? _audioService;
   PhotoCaptureService? _photoService;
   VideoCaptureService? _videoService;
-  final TextInputService _textService = TextInputService();
   ScheduleService? _scheduleService;
   final ForegroundServiceManager _foregroundService = ForegroundServiceManager();
   final ChecksumService _checksumService = ChecksumService();
@@ -168,57 +166,48 @@ class RecordingProvider extends ChangeNotifier {
 
   Future<Event> _stopAudioRecording() async {
     final path = await _audio.stopRecording();
-    final file = File(path);
-    final fileSize = await file.length();
-    final checksum = await _checksumService.computeSha256(path);
-
-    return Event(
-      type: EventType.audio,
-      payloadPath: path,
-      checksum: checksum,
-      fileSizeBytes: fileSize,
-    );
+    return _buildFileEvent(path, EventType.audio);
   }
 
   Future<Event> _stopVideoRecording() async {
     final path = await _video.stopVideoRecording();
-    final file = File(path);
-    final fileSize = await file.length();
-    final checksum = await _checksumService.computeSha256(path);
-
-    return Event(
-      type: EventType.video,
-      payloadPath: path,
-      checksum: checksum,
-      fileSizeBytes: fileSize,
-    );
+    return _buildFileEvent(path, EventType.video);
   }
 
   /// Capture a photo and create an event.
   Future<Event?> capturePhoto({String? annotation}) async {
     await _photo.init();
     final path = await _photo.capturePhoto(annotation: annotation);
-    final file = File(path);
-    final fileSize = await file.length();
-    final checksum = await _checksumService.computeSha256(path);
-
-    final event = Event(
-      type: EventType.photo,
-      payloadPath: path,
-      annotation: annotation,
-      checksum: checksum,
-      fileSizeBytes: fileSize,
-    );
-
+    final event = await _buildFileEvent(path, EventType.photo, annotation: annotation);
     await eventStorageService?.insertEvent(event);
     return event;
   }
 
   /// Create a text event.
   Future<Event?> createTextEvent(String content, {String? annotation}) async {
-    final event = _textService.createTextEvent(content, annotation: annotation);
+    final event = Event(
+      type: EventType.text,
+      textContent: content,
+      annotation: annotation,
+    );
     await eventStorageService?.insertEvent(event);
     return event;
+  }
+
+  Future<Event> _buildFileEvent(
+    String path,
+    EventType type, {
+    String? annotation,
+  }) async {
+    final file = File(path);
+    final results = await (file.length(), _checksumService.computeSha256(path)).wait;
+    return Event(
+      type: type,
+      payloadPath: path,
+      annotation: annotation,
+      checksum: results.$2,
+      fileSizeBytes: results.$1,
+    );
   }
 
   /// Schedule a future recording session.
@@ -249,9 +238,6 @@ class RecordingProvider extends ChangeNotifier {
     _state = const RecordingState();
     notifyListeners();
   }
-
-  /// Switch mode helper — convenience for UI.
-  void switchMode(RecordingMode mode) => setMode(mode);
 
   String _formatDuration(Duration d) {
     final hours = d.inHours.toString().padLeft(2, '0');

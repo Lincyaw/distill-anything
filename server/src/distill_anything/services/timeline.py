@@ -91,7 +91,9 @@ class TimelineService:
             logger.warning("openai package not installed, skipping daily summary")
             return ""
 
-        client = AsyncOpenAI(base_url=settings.llm_base_url, api_key="not-needed")
+        if not hasattr(self, "_llm_client"):
+            self._llm_client = AsyncOpenAI(base_url=settings.llm_base_url, api_key="not-needed")
+        client = self._llm_client
         date_str = date.strftime("%Y-%m-%d")
 
         prompt = (

@@ -1,5 +1,6 @@
 """Event ingestion API endpoints."""
 
+import asyncio
 import json
 import tempfile
 from datetime import datetime
@@ -34,15 +35,14 @@ async def create_event(
     raw_file_path: str | None = None
 
     if file is not None:
-        # Save uploaded file to temp, compute checksum, move to storage
         with tempfile.NamedTemporaryFile(
             delete=False, suffix=Path(file.filename or "").suffix
         ) as tmp:
-            content = await file.read()
-            tmp.write(content)
+            while chunk := await file.read(65536):
+                tmp.write(chunk)
             tmp_path = Path(tmp.name)
 
-        server_checksum = compute_file_checksum(tmp_path)
+        server_checksum = await asyncio.to_thread(compute_file_checksum, tmp_path)
         dest = storage.store_file(tmp_path, event_data.id, event_data.timestamp)
         raw_file_path = str(dest)
 
@@ -60,21 +60,9 @@ async def create_event(
     await session.commit()
     await session.refresh(db_event)
 
-    return EventResponse(
-        id=db_event.id,
-        type=db_event.type,
-        timestamp=db_event.timestamp,
-        text_content=db_event.text_content,
-        annotation=db_event.annotation,
-        checksum=db_event.checksum,
-        server_checksum=server_checksum,
-        file_size_bytes=db_event.file_size_bytes,
-        upload_status=db_event.upload_status,
-        processing_status=db_event.processing_status,
-        transcription=db_event.transcription,
-        description=db_event.description,
-        created_at=db_event.created_at,
-    )
+    resp = EventResponse.model_validate(db_event)
+    resp.server_checksum = server_checksum
+    return resp
 
 
 @router.get("/events", response_model=list[EventResponse])
@@ -100,23 +88,7 @@ async def list_events(
     result = await session.execute(query)
     events = result.scalars().all()
 
-    return [
-        EventResponse(
-            id=e.id,
-            type=e.type,
-            timestamp=e.timestamp,
-            text_content=e.text_content,
-            annotation=e.annotation,
-            checksum=e.checksum,
-            file_size_bytes=e.file_size_bytes,
-            upload_status=e.upload_status,
-            processing_status=e.processing_status,
-            transcription=e.transcription,
-            description=e.description,
-            created_at=e.created_at,
-        )
-        for e in events
-    ]
+    return [EventResponse.model_validate(e) for e in events]
 
 
 @router.get("/events/{event_id}", response_model=EventResponse)
@@ -130,20 +102,7 @@ async def get_event(
     if event is None:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    return EventResponse(
-        id=event.id,
-        type=event.type,
-        timestamp=event.timestamp,
-        text_content=event.text_content,
-        annotation=event.annotation,
-        checksum=event.checksum,
-        file_size_bytes=event.file_size_bytes,
-        upload_status=event.upload_status,
-        processing_status=event.processing_status,
-        transcription=event.transcription,
-        description=event.description,
-        created_at=event.created_at,
-    )
+    return EventResponse.model_validate(event)
 
 
 @router.post("/events/{event_id}/reprocess", response_model=EventResponse)
@@ -161,17 +120,4 @@ async def reprocess_event(
     event.description = None  # type: ignore[assignment]
     await session.commit()
     await session.refresh(event)
-    return EventResponse(
-        id=event.id,
-        type=event.type,
-        timestamp=event.timestamp,
-        text_content=event.text_content,
-        annotation=event.annotation,
-        checksum=event.checksum,
-        file_size_bytes=event.file_size_bytes,
-        upload_status=event.upload_status,
-        processing_status=event.processing_status,
-        transcription=event.transcription,
-        description=event.description,
-        created_at=event.created_at,
-    )
+    return EventResponse.model_validate(event)

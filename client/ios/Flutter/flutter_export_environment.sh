@@ -1,6 +1,6 @@
 #!/bin/sh
 # This is a generated file; do not edit or check into version control.
-export "FLUTTER_ROOT=/nix/store/kgbas685r5dnnymlqwsa2ik0wwrh4248-flutter-wrapped-3.41.5-sdk-links"
+export "FLUTTER_ROOT=/home/ddq/flutter"
 export "FLUTTER_APPLICATION_PATH=/home/ddq/AoyangSpace/distill-anything/client"
 export "COCOAPODS_PARALLEL_CODE_SIGN=true"
 export "FLUTTER_TARGET=lib/main.dart"

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.17.1/.schema/devbox.schema.json",
+  "packages": [
+    "python@3.13",
+    "uv@latest",
+    "jdk@17",
+    "android-tools@latest"
+  ],
+  "env": {
+    "ANDROID_HOME": "$HOME/Android/Sdk",
+    "FLUTTER_ROOT": "$HOME/flutter",
+    "PATH": "$HOME/flutter/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+  },
+  "shell": {
+    "init_hook": [],
+    "scripts": {
+      "test:server": "cd server && unset UV_PROJECT_ENVIRONMENT && uv run pytest tests/ -x -q",
+      "test:client": "cd client && flutter test",
+      "lint:server": "cd server && unset UV_PROJECT_ENVIRONMENT && uv run ruff check src/ && uv run mypy src/",
+      "lint:client": "cd client && flutter analyze",
+      "build:apk": "cd client && flutter build apk",
+      "test:all": "devbox run test:server && devbox run test:client",
+      "lint:all": "devbox run lint:server && devbox run lint:client"
+    }
+  }
+}

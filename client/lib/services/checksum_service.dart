@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 import 'package:crypto/crypto.dart';
 
@@ -6,23 +5,15 @@ import 'package:crypto/crypto.dart';
 ///
 /// Used to verify data integrity after upload (client vs server comparison).
 class ChecksumService {
-  /// Compute the SHA-256 checksum of a file at [filePath].
-  ///
-  /// Returns the hex-encoded checksum string.
+  /// Compute the SHA-256 checksum of a file at [filePath] using streaming.
   Future<String> computeSha256(String filePath) async {
-    final file = File(filePath);
-    final bytes = await file.readAsBytes();
-    final digest = sha256.convert(bytes);
+    final digest = await sha256.bind(File(filePath).openRead()).first;
     return digest.toString();
   }
 
-  /// Compute the MD5 checksum of a file at [filePath].
-  ///
-  /// Returns the hex-encoded checksum string.
+  /// Compute the MD5 checksum of a file at [filePath] using streaming.
   Future<String> computeMd5(String filePath) async {
-    final file = File(filePath);
-    final bytes = await file.readAsBytes();
-    final digest = md5.convert(bytes);
+    final digest = await md5.bind(File(filePath).openRead()).first;
     return digest.toString();
   }
 

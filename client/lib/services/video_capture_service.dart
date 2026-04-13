@@ -42,8 +42,8 @@ class VideoCaptureService {
     return _controller!;
   }
 
-  /// Start recording video. Returns the file path.
-  Future<String> startVideoRecording() async {
+  /// Start recording video.
+  Future<void> startVideoRecording() async {
     if (_controller == null || !_isInitialized) {
       throw StateError('Camera not initialized. Call init() first.');
     }
@@ -53,9 +53,6 @@ class VideoCaptureService {
 
     await _controller!.startVideoRecording();
     _isRecording = true;
-
-    final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-    return 'video_$timestamp.mp4';
   }
 
   /// Stop recording and return the final file path.
@@ -71,13 +68,13 @@ class VideoCaptureService {
     final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
     final destPath = p.join(dir.path, 'video_$timestamp.mp4');
 
-    await File(xFile.path).copy(destPath);
-    if (xFile.path != destPath) {
+    try {
+      await File(xFile.path).rename(destPath);
+    } on FileSystemException {
+      await File(xFile.path).copy(destPath);
       try {
         await File(xFile.path).delete();
-      } catch (_) {
-        // Ignore cleanup errors
-      }
+      } catch (_) {}
     }
 
     return destPath;

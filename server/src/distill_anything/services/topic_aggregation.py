@@ -37,7 +37,9 @@ class TopicAggregationService:
             logger.warning("openai package not installed, skipping topic aggregation")
             return []
 
-        client = AsyncOpenAI(base_url=settings.llm_base_url, api_key="not-needed")
+        if not hasattr(self, "_llm_client"):
+            self._llm_client = AsyncOpenAI(base_url=settings.llm_base_url, api_key="not-needed")
+        client = self._llm_client
 
         # Build context from events
         events_context = "\n".join(
