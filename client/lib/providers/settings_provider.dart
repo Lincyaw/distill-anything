@@ -59,9 +59,5 @@ class SettingsProvider extends ChangeNotifier {
     return connected;
   }
 
-  @override
-  void dispose() {
-    _uploadService.dispose();
-    super.dispose();
-  }
+  // UploadService lifecycle is managed by the app — don't dispose here.
 }

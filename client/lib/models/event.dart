@@ -45,15 +45,23 @@ class Event {
   factory Event.fromMap(Map<String, dynamic> map) {
     return Event(
       id: map['id'] as String,
-      type: EventType.values.byName(map['type'] as String),
+      type: _parseEnum(EventType.values, map['type'] as String, EventType.text),
       timestamp: DateTime.parse(map['timestamp'] as String),
       payloadPath: map['payload_path'] as String?,
       textContent: map['text_content'] as String?,
       annotation: map['annotation'] as String?,
       checksum: map['checksum'] as String?,
-      uploadStatus: UploadStatus.values.byName(map['upload_status'] as String),
+      uploadStatus: _parseEnum(
+          UploadStatus.values, map['upload_status'] as String, UploadStatus.pending),
       fileSizeBytes: map['file_size_bytes'] as int?,
     );
+  }
+
+  static T _parseEnum<T extends Enum>(List<T> values, String name, T fallback) {
+    for (final v in values) {
+      if (v.name == name) return v;
+    }
+    return fallback;
   }
 
   Event copyWith({

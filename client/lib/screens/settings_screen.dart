@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/settings_provider.dart';
+import '../services/storage_manager_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -14,6 +15,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController _portController;
   bool _isTesting = false;
   bool? _testResult;
+  Map<String, int>? _storageSummary;
 
   @override
   void initState() {
@@ -21,6 +23,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final config = context.read<SettingsProvider>().config;
     _hostController = TextEditingController(text: config.host);
     _portController = TextEditingController(text: config.port.toString());
+    _loadStorageInfo();
+  }
+
+  Future<void> _loadStorageInfo() async {
+    try {
+      final storage = StorageManagerService();
+      final summary = await storage.getStorageSummary();
+      if (mounted) {
+        setState(() => _storageSummary = summary);
+      }
+    } catch (_) {
+      // Storage info unavailable
+    }
   }
 
   @override
@@ -210,23 +225,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Local storage info',
-                        style: theme.textTheme.bodyLarge,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Storage management will be available when the '
-                        'StorageManagerService is implemented.',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
+                  child: _storageSummary == null
+                      ? const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(8.0),
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _storageRow(
+                              'Events',
+                              '${_storageSummary!['event_count'] ?? 0}',
+                            ),
+                            const SizedBox(height: 8),
+                            _storageRow(
+                              'Storage used',
+                              _formatBytes(
+                                  _storageSummary!['used_bytes'] ?? 0),
+                            ),
+                            const SizedBox(height: 8),
+                            _storageRow(
+                              'DB reported',
+                              _formatBytes(
+                                  _storageSummary!['db_reported_bytes'] ?? 0),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
-                  ),
                 ),
               ),
             ],
@@ -234,6 +260,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
         },
       ),
     );
+  }
+
+  Widget _storageRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.bodyMedium),
+        Text(value, style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            )),
+      ],
+    );
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
   String _formatTime(DateTime dt) {

@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart';
 import '../models/event.dart';
 import '../models/recording_state.dart';
 import '../services/audio_recording_service.dart';
-import '../services/event_storage_service.dart';
 import '../services/foreground_service.dart';
 import '../services/photo_capture_service.dart';
 import '../services/schedule_service.dart';
@@ -28,8 +27,9 @@ class RecordingProvider extends ChangeNotifier {
   final ForegroundServiceManager _foregroundService = ForegroundServiceManager();
   final ChecksumService _checksumService = ChecksumService();
 
-  // External dependency — set by the app before use
-  EventStorageService? eventStorageService;
+  // Callback to notify EventProvider when a new event is created.
+  // Set by the app before use — avoids double-writing to DB.
+  Future<void> Function(Event)? onEventCreated;
 
   StreamSubscription<Duration>? _durationSub;
 
@@ -64,29 +64,44 @@ class RecordingProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Start a recording session in the current mode.
-  Future<void> startRecording() async {
-    switch (_state.mode) {
-      case RecordingMode.audio:
-        await _startAudioRecording();
-        break;
-      case RecordingMode.video:
-        await _startVideoRecording();
-        break;
-      case RecordingMode.photo:
-        // Photo is instant capture, not a continuous recording
-        await capturePhoto();
-        return;
-      case RecordingMode.text:
-        // Text doesn't use start/stop — use createTextEvent directly
-        return;
-    }
+  /// Error message from the last failed operation, if any.
+  String? _lastError;
+  String? get lastError => _lastError;
 
-    _state = _state.copyWith(
-      status: RecordingStatus.recording,
-      startTime: DateTime.now(),
-    );
+  /// Clear the last error.
+  void clearError() {
+    _lastError = null;
     notifyListeners();
+  }
+
+  /// Start a recording session in the current mode.
+  /// Throws are caught internally — check [lastError] for failures.
+  Future<void> startRecording() async {
+    _lastError = null;
+    try {
+      switch (_state.mode) {
+        case RecordingMode.audio:
+          await _startAudioRecording();
+          break;
+        case RecordingMode.video:
+          await _startVideoRecording();
+          break;
+        case RecordingMode.photo:
+          await capturePhoto();
+          return;
+        case RecordingMode.text:
+          return;
+      }
+
+      _state = _state.copyWith(
+        status: RecordingStatus.recording,
+        startTime: DateTime.now(),
+      );
+      notifyListeners();
+    } catch (e) {
+      _lastError = e.toString();
+      notifyListeners();
+    }
   }
 
   Future<void> _startAudioRecording() async {
@@ -108,6 +123,9 @@ class RecordingProvider extends ChangeNotifier {
     });
   }
 
+  Timer? _videoTimer;
+  DateTime? _videoStartTime;
+
   Future<void> _startVideoRecording() async {
     await _video.init();
     await _video.startVideoRecording();
@@ -115,6 +133,19 @@ class RecordingProvider extends ChangeNotifier {
       title: 'Video Recording',
       body: 'Recording video...',
     );
+
+    _videoStartTime = DateTime.now();
+    _videoTimer?.cancel();
+    _videoTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (_videoStartTime == null) return;
+      final elapsed = DateTime.now().difference(_videoStartTime!);
+      _state = _state.copyWith(elapsed: elapsed);
+      notifyListeners();
+      _foregroundService.updateNotification(
+        title: 'Video Recording',
+        body: 'Elapsed: ${_formatDuration(elapsed)}',
+      );
+    });
   }
 
   /// Pause the current recording.
@@ -153,12 +184,15 @@ class RecordingProvider extends ChangeNotifier {
     await _foregroundService.stopForegroundService();
     _durationSub?.cancel();
     _durationSub = null;
+    _videoTimer?.cancel();
+    _videoTimer = null;
+    _videoStartTime = null;
 
     _state = const RecordingState(); // Reset to idle
     notifyListeners();
 
     if (event != null) {
-      await eventStorageService?.insertEvent(event);
+      await onEventCreated?.call(event);
     }
 
     return event;
@@ -179,7 +213,7 @@ class RecordingProvider extends ChangeNotifier {
     await _photo.init();
     final path = await _photo.capturePhoto(annotation: annotation);
     final event = await _buildFileEvent(path, EventType.photo, annotation: annotation);
-    await eventStorageService?.insertEvent(event);
+    await onEventCreated?.call(event);
     return event;
   }
 
@@ -190,7 +224,7 @@ class RecordingProvider extends ChangeNotifier {
       textContent: content,
       annotation: annotation,
     );
-    await eventStorageService?.insertEvent(event);
+    await onEventCreated?.call(event);
     return event;
   }
 
@@ -249,6 +283,7 @@ class RecordingProvider extends ChangeNotifier {
   @override
   void dispose() {
     _durationSub?.cancel();
+    _videoTimer?.cancel();
     _audioService?.dispose();
     _photoService?.dispose();
     _videoService?.dispose();

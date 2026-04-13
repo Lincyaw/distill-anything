@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
+import 'package:video_player/video_player.dart';
 import '../models/event.dart';
 import '../providers/event_provider.dart';
 import '../widgets/event_list_item.dart';
@@ -33,8 +34,10 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
         _showAudioPreview(context, event);
         break;
       case EventType.video:
+        _showVideoPreview(context, event);
+        break;
       case EventType.text:
-        _showTextDetail(context, event);
+        _showTextPreview(context, event);
         break;
     }
   }
@@ -52,6 +55,7 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
         child: Stack(
           fit: StackFit.expand,
           children: [
+            Container(color: Colors.black),
             InteractiveViewer(
               minScale: 0.5,
               maxScale: 4.0,
@@ -83,48 +87,89 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
       return;
     }
 
+    final player = AudioPlayer();
     showDialog(
       context: context,
       builder: (ctx) {
         return AlertDialog(
           title: const Text('Audio Playback'),
-          content: _AudioPlayerWidget(path: path),
+          content: _AudioPlayerWidget(path: path, player: player),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx),
+              onPressed: () {
+                player.stop();
+                Navigator.pop(ctx);
+              },
               child: const Text('Close'),
             ),
           ],
         );
       },
+    ).then((_) => player.dispose());
+  }
+
+  void _showVideoPreview(BuildContext context, Event event) {
+    final path = event.payloadPath;
+    if (path == null || !File(path).existsSync()) {
+      _showMissingFileDialog(context, 'Video file not found');
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog.fullscreen(
+        child: _VideoPlayerWidget(
+          path: path,
+          onClose: () => Navigator.pop(ctx),
+        ),
+      ),
     );
   }
 
-  void _showTextDetail(BuildContext context, Event event) {
+  void _showTextPreview(BuildContext context, Event event) {
     final dateFormat = DateFormat('yyyy-MM-dd HH:mm:ss');
+    final content = event.textContent ?? '';
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('${event.type.name[0].toUpperCase()}${event.type.name.substring(1)} Event'),
+        title: Row(
+          children: [
+            Icon(Icons.text_snippet, color: Colors.amber.shade700, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                dateFormat.format(event.timestamp),
+                style: const TextStyle(fontSize: 16),
+              ),
+            ),
+          ],
+        ),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _detailRow('ID', event.id),
-              _detailRow('Time', dateFormat.format(event.timestamp)),
-              _detailRow('Type', event.type.name),
-              _detailRow('Status', event.uploadStatus.name),
-              if (event.textContent != null)
-                _detailRow('Content', event.textContent!),
-              if (event.annotation != null)
+              if (content.isNotEmpty) ...[
+                Container(
+                  width: double.maxFinite,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(ctx).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: SelectableText(
+                    content,
+                    style: const TextStyle(fontSize: 15, height: 1.5),
+                  ),
+                ),
+              ] else
+                const Text('(No text content)',
+                    style: TextStyle(fontStyle: FontStyle.italic)),
+              if (event.annotation != null) ...[
+                const SizedBox(height: 12),
                 _detailRow('Annotation', event.annotation!),
-              if (event.payloadPath != null)
-                _detailRow('File', event.payloadPath!),
-              if (event.fileSizeBytes != null)
-                _detailRow('Size', _formatFileSize(event.fileSizeBytes!)),
-              if (event.checksum != null)
-                _detailRow('Checksum', '${event.checksum!.substring(0, 16)}...'),
+              ],
             ],
           ),
         ),
@@ -168,12 +213,6 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
     );
   }
 
-  String _formatFileSize(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -182,17 +221,23 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
         actions: [
           Consumer<EventProvider>(
             builder: (context, provider, _) {
-              return PopupMenuButton<EventType?>(
+              return PopupMenuButton<String>(
                 icon: const Icon(Icons.filter_list),
                 tooltip: 'Filter by type',
-                onSelected: (type) => provider.setFilter(type),
+                onSelected: (value) {
+                  if (value == 'all') {
+                    provider.setFilter(null);
+                  } else {
+                    provider.setFilter(EventType.values.byName(value));
+                  }
+                },
                 itemBuilder: (_) => [
                   const PopupMenuItem(
-                    value: null,
+                    value: 'all',
                     child: Text('All'),
                   ),
                   const PopupMenuItem(
-                    value: EventType.audio,
+                    value: 'audio',
                     child: ListTile(
                       leading: Icon(Icons.mic),
                       title: Text('Audio'),
@@ -201,7 +246,7 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
                     ),
                   ),
                   const PopupMenuItem(
-                    value: EventType.photo,
+                    value: 'photo',
                     child: ListTile(
                       leading: Icon(Icons.photo_camera),
                       title: Text('Photo'),
@@ -210,7 +255,7 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
                     ),
                   ),
                   const PopupMenuItem(
-                    value: EventType.video,
+                    value: 'video',
                     child: ListTile(
                       leading: Icon(Icons.videocam),
                       title: Text('Video'),
@@ -219,7 +264,7 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
                     ),
                   ),
                   const PopupMenuItem(
-                    value: EventType.text,
+                    value: 'text',
                     child: ListTile(
                       leading: Icon(Icons.text_snippet),
                       title: Text('Text'),
@@ -287,8 +332,9 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
 
 class _AudioPlayerWidget extends StatefulWidget {
   final String path;
+  final AudioPlayer player;
 
-  const _AudioPlayerWidget({required this.path});
+  const _AudioPlayerWidget({required this.path, required this.player});
 
   @override
   State<_AudioPlayerWidget> createState() => _AudioPlayerWidgetState();
@@ -302,7 +348,7 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
   @override
   void initState() {
     super.initState();
-    _player = AudioPlayer();
+    _player = widget.player;
     _init();
   }
 
@@ -320,7 +366,7 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
 
   @override
   void dispose() {
-    _player.dispose();
+    _player.stop();
     super.dispose();
   }
 
@@ -418,6 +464,144 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _VideoPlayerWidget extends StatefulWidget {
+  final String path;
+  final VoidCallback onClose;
+
+  const _VideoPlayerWidget({required this.path, required this.onClose});
+
+  @override
+  State<_VideoPlayerWidget> createState() => _VideoPlayerWidgetState();
+}
+
+class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
+  late final VideoPlayerController _controller;
+  bool _isInitialized = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.file(File(widget.path));
+    _controller.initialize().then((_) {
+      setState(() => _isInitialized = true);
+      _controller.play();
+    }).catchError((e) {
+      setState(() => _error = e.toString());
+    });
+    _controller.addListener(() {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  String _formatDuration(Duration duration) {
+    final minutes = duration.inMinutes.toString().padLeft(2, '0');
+    final seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Container(color: Colors.black),
+        if (_error != null)
+          Center(
+            child: Text('Failed to load video:\n$_error',
+                style: const TextStyle(color: Colors.white)),
+          )
+        else if (!_isInitialized)
+          const Center(child: CircularProgressIndicator())
+        else
+          Center(
+            child: AspectRatio(
+              aspectRatio: _controller.value.aspectRatio,
+              child: VideoPlayer(_controller),
+            ),
+          ),
+        // Close button
+        Positioned(
+          top: 16,
+          left: 8,
+          child: IconButton(
+            icon: const Icon(Icons.close, color: Colors.white, size: 28),
+            style: IconButton.styleFrom(backgroundColor: Colors.black54),
+            onPressed: widget.onClose,
+          ),
+        ),
+        // Controls overlay
+        if (_isInitialized)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 32,
+            child: Column(
+              children: [
+                // Play/pause
+                IconButton(
+                  iconSize: 56,
+                  icon: Icon(
+                    _controller.value.isPlaying
+                        ? Icons.pause_circle_filled
+                        : Icons.play_circle_filled,
+                    color: Colors.white,
+                  ),
+                  onPressed: () async {
+                    if (_controller.value.isPlaying) {
+                      _controller.pause();
+                    } else {
+                      if (_controller.value.position >=
+                          _controller.value.duration) {
+                        await _controller.seekTo(Duration.zero);
+                      }
+                      _controller.play();
+                    }
+                  },
+                ),
+                // Progress bar
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      Text(
+                        _formatDuration(_controller.value.position),
+                        style: const TextStyle(color: Colors.white, fontSize: 12),
+                      ),
+                      Expanded(
+                        child: Slider(
+                          max: _controller.value.duration.inMilliseconds
+                              .toDouble()
+                              .clamp(1.0, double.infinity),
+                          value: _controller.value.position.inMilliseconds
+                              .toDouble()
+                              .clamp(0.0, _controller.value.duration.inMilliseconds.toDouble()),
+                          onChanged: (v) {
+                            _controller.seekTo(Duration(milliseconds: v.toInt()));
+                          },
+                        ),
+                      ),
+                      Text(
+                        _formatDuration(_controller.value.duration),
+                        style: const TextStyle(color: Colors.white, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

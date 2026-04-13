@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:crypto/crypto.dart';
 
@@ -19,7 +20,7 @@ class ChecksumService {
 
   /// Compute SHA-256 checksum for a string [content].
   String computeStringSha256(String content) {
-    final bytes = content.codeUnits;
+    final bytes = utf8.encode(content);
     final digest = sha256.convert(bytes);
     return digest.toString();
   }

@@ -5,6 +5,7 @@ import 'providers/event_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/upload_provider.dart';
 import 'services/event_storage_service.dart';
+import 'services/upload_service.dart';
 import 'screens/home_screen.dart';
 
 class DistillAnythingApp extends StatelessWidget {
@@ -13,6 +14,7 @@ class DistillAnythingApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final eventStorage = EventStorageService();
+    final uploadService = UploadService(storage: eventStorage);
 
     return MultiProvider(
       providers: [
@@ -22,16 +24,19 @@ class DistillAnythingApp extends StatelessWidget {
           return provider;
         }),
         ChangeNotifierProvider(create: (_) {
-          final provider = SettingsProvider();
+          final provider = SettingsProvider(uploadService: uploadService);
           provider.loadSettings();
           return provider;
         }),
-        ChangeNotifierProvider(create: (_) {
-          final provider = RecordingProvider();
-          provider.eventStorageService = eventStorage;
-          return provider;
-        }),
-        ChangeNotifierProvider(create: (_) => UploadProvider()),
+        ChangeNotifierProxyProvider<EventProvider, RecordingProvider>(
+          create: (_) => RecordingProvider(),
+          update: (_, eventProvider, recording) {
+            recording!.onEventCreated = (event) => eventProvider.addEvent(event);
+            return recording;
+          },
+        ),
+        ChangeNotifierProvider(
+            create: (_) => UploadProvider(uploadService: uploadService)),
       ],
       child: MaterialApp(
         title: 'Distill Anything',

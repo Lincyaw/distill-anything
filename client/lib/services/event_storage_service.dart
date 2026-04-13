@@ -17,6 +17,7 @@ class EventStorageService {
   Future<void>? _initFuture;
 
   /// Ensure the database is initialized; safe to call multiple times.
+  /// Resets on failure so the next call retries.
   Future<void> _ensureInitialized() async {
     if (_database != null) return;
     if (_initFuture != null) {
@@ -24,7 +25,12 @@ class EventStorageService {
       return;
     }
     _initFuture = init();
-    await _initFuture;
+    try {
+      await _initFuture;
+    } catch (_) {
+      _initFuture = null;
+      rethrow;
+    }
   }
 
   /// The underlying database instance. Auto-initializes on first access.

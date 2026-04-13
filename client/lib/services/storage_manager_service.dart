@@ -26,7 +26,7 @@ class StorageManagerService {
   /// Recursively scans the application documents directory.
   Future<int> getUsedStorageBytes() async {
     final dir = await getApplicationDocumentsDirectory();
-    return _calculateDirectorySize(dir);
+    return await _calculateDirectorySize(dir);
   }
 
   /// Get available device storage in bytes.
@@ -105,13 +105,13 @@ class StorageManagerService {
   }
 
   /// Recursively calculate the total size of all files in a directory.
-  int _calculateDirectorySize(Directory dir) {
+  /// Uses async I/O to avoid blocking the UI thread.
+  Future<int> _calculateDirectorySize(Directory dir) async {
     int size = 0;
-    if (dir.existsSync()) {
-      for (final entity in dir.listSync(recursive: true)) {
-        if (entity is File) {
-          size += entity.lengthSync();
-        }
+    if (!await dir.exists()) return size;
+    await for (final entity in dir.list(recursive: true)) {
+      if (entity is File) {
+        size += await entity.length();
       }
     }
     return size;

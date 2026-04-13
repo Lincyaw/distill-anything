@@ -118,6 +118,40 @@ void main() {
       }
     });
 
+    test('fromMap uses fallback for unknown EventType', () {
+      final map = {
+        'id': 'unknown-type',
+        'type': 'hologram',
+        'timestamp': '2026-04-12T00:00:00.000Z',
+        'payload_path': null,
+        'text_content': null,
+        'annotation': null,
+        'checksum': null,
+        'upload_status': 'pending',
+        'file_size_bytes': null,
+      };
+
+      final event = Event.fromMap(map);
+      expect(event.type, EventType.text);
+    });
+
+    test('fromMap uses fallback for unknown UploadStatus', () {
+      final map = {
+        'id': 'unknown-status',
+        'type': 'text',
+        'timestamp': '2026-04-12T00:00:00.000Z',
+        'payload_path': null,
+        'text_content': null,
+        'annotation': null,
+        'checksum': null,
+        'upload_status': 'quantum_uploaded',
+        'file_size_bytes': null,
+      };
+
+      final event = Event.fromMap(map);
+      expect(event.uploadStatus, UploadStatus.pending);
+    });
+
     test('copyWith creates modified copy', () {
       final original = Event(
         id: 'copy-id',
@@ -158,28 +192,6 @@ void main() {
     test('default uploadStatus is pending', () {
       final event = Event(type: EventType.text);
       expect(event.uploadStatus, UploadStatus.pending);
-    });
-  });
-
-  group('Checksum service (string-based)', () {
-    test('computeStringSha256 produces consistent results', () {
-      // This tests the concept - actual ChecksumService uses crypto package
-      // and requires dart:io which needs platform support
-      final map1 = Event(
-        id: 'same',
-        type: EventType.text,
-        timestamp: DateTime.utc(2026, 1, 1),
-        uploadStatus: UploadStatus.pending,
-      ).toMap();
-
-      final map2 = Event(
-        id: 'same',
-        type: EventType.text,
-        timestamp: DateTime.utc(2026, 1, 1),
-        uploadStatus: UploadStatus.pending,
-      ).toMap();
-
-      expect(map1, equals(map2));
     });
   });
 }

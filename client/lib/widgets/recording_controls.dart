@@ -19,24 +19,55 @@ class RecordingControls extends StatelessWidget {
       builder: (context, provider, _) {
         final state = provider.state;
 
-        switch (state.mode) {
-          case RecordingMode.audio:
-            return _AudioControls(
-              state: state,
-              provider: provider,
-              formatDuration: _formatDuration,
-            );
-          case RecordingMode.photo:
-            return _PhotoControls(provider: provider);
-          case RecordingMode.video:
-            return _VideoControls(
-              state: state,
-              provider: provider,
-              formatDuration: _formatDuration,
-            );
-          case RecordingMode.text:
-            return _TextControls(provider: provider);
-        }
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (provider.lastError != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Card(
+                  color: Theme.of(context).colorScheme.errorContainer,
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        Icon(Icons.error_outline,
+                            color: Theme.of(context).colorScheme.error),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            provider.lastError!,
+                            style: TextStyle(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onErrorContainer),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: provider.clearError,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            switch (state.mode) {
+              RecordingMode.audio => _AudioControls(
+                  state: state,
+                  provider: provider,
+                  formatDuration: _formatDuration,
+                ),
+              RecordingMode.photo => _PhotoControls(provider: provider),
+              RecordingMode.video => _VideoControls(
+                  state: state,
+                  provider: provider,
+                  formatDuration: _formatDuration,
+                ),
+              RecordingMode.text => _TextControls(provider: provider),
+            },
+          ],
+        );
       },
     );
   }
