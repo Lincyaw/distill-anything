@@ -5,7 +5,7 @@ class ServerConfig {
   final DateTime? lastChecked;
 
   const ServerConfig({
-    this.host = '192.168.1.100',
+    this.host = '10.20.34.38',
     this.port = 8000,
     this.isConnected = false,
     this.lastChecked,

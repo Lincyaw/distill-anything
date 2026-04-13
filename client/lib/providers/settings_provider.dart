@@ -41,7 +41,7 @@ class SettingsProvider extends ChangeNotifier {
   /// Load settings from shared_preferences.
   Future<void> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    final host = prefs.getString('server_host') ?? '192.168.1.100';
+    final host = prefs.getString('server_host') ?? '10.20.34.38';
     final port = prefs.getInt('server_port') ?? 8000;
     _config = ServerConfig(host: host, port: port);
     _uploadService.updateConfig(_config);
