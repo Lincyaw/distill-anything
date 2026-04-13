@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/server_config.dart';
@@ -8,6 +8,9 @@ import '../services/upload_service.dart';
 class SettingsProvider extends ChangeNotifier {
   final UploadService _uploadService;
   ServerConfig _config = const ServerConfig();
+  ThemeMode _themeMode = ThemeMode.system;
+  bool _isTesting = false;
+  bool get isTesting => _isTesting;
 
   SettingsProvider({UploadService? uploadService})
       : _uploadService = uploadService ?? UploadService();
@@ -15,6 +18,18 @@ class SettingsProvider extends ChangeNotifier {
   ServerConfig get config => _config;
   bool get isConnected => _config.isConnected;
   DateTime? get lastChecked => _config.lastChecked;
+  ThemeMode get themeMode => _themeMode;
+
+  void setThemeMode(ThemeMode mode) {
+    _themeMode = mode;
+    notifyListeners();
+    _saveThemeMode(mode);
+  }
+
+  Future<void> _saveThemeMode(ThemeMode mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('theme_mode', mode.name);
+  }
 
   /// Update the server host address.
   void setHost(String host) {
@@ -43,6 +58,11 @@ class SettingsProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     final host = prefs.getString('server_host') ?? '10.20.34.38';
     final port = prefs.getInt('server_port') ?? 8000;
+    final themeName = prefs.getString('theme_mode') ?? 'system';
+    _themeMode = ThemeMode.values.firstWhere(
+      (m) => m.name == themeName,
+      orElse: () => ThemeMode.system,
+    );
     _config = ServerConfig(host: host, port: port);
     _uploadService.updateConfig(_config);
     notifyListeners();
@@ -50,11 +70,15 @@ class SettingsProvider extends ChangeNotifier {
 
   /// Test the connection to the configured server.
   Future<bool> testConnection() async {
+    _isTesting = true;
+    notifyListeners();
+
     final connected = await _uploadService.testConnection();
     _config = _config.copyWith(
       isConnected: connected,
       lastChecked: DateTime.now(),
     );
+    _isTesting = false;
     notifyListeners();
     return connected;
   }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
@@ -163,8 +164,26 @@ class EventStorageService {
   }
 
   /// Delete an event by its [id].
+  /// Also deletes the associated payload file if it exists.
   Future<void> deleteEvent(String id) async {
     final db = await _db;
+    // Fetch the event first to get the payload path.
+    final maps = await db.query(
+      'events',
+      columns: ['payload_path'],
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (maps.isNotEmpty) {
+      final payloadPath = maps.first['payload_path'] as String?;
+      if (payloadPath != null) {
+        final file = File(payloadPath);
+        if (await file.exists()) {
+          await file.delete();
+        }
+      }
+    }
     await db.delete(
       'events',
       where: 'id = ?',
@@ -188,6 +207,39 @@ class EventStorageService {
     final total = result.first['total'];
     if (total is int) return total;
     return 0;
+  }
+
+  /// Delete all events whose upload status is 'uploaded' or 'verified'.
+  /// Also deletes associated payload files.
+  /// Returns the number of events deleted.
+  Future<int> deleteUploadedEvents() async {
+    final db = await _db;
+    // First get payload paths to delete files
+    final maps = await db.query(
+      'events',
+      columns: ['id', 'payload_path'],
+      where: 'upload_status = ? OR upload_status = ?',
+      whereArgs: [UploadStatus.uploaded.name, UploadStatus.verified.name],
+    );
+
+    // Delete files
+    for (final map in maps) {
+      final path = map['payload_path'] as String?;
+      if (path != null) {
+        final file = File(path);
+        if (await file.exists()) {
+          await file.delete();
+        }
+      }
+    }
+
+    // Delete from DB
+    final count = await db.delete(
+      'events',
+      where: 'upload_status = ? OR upload_status = ?',
+      whereArgs: [UploadStatus.uploaded.name, UploadStatus.verified.name],
+    );
+    return count;
   }
 
   /// Close the database connection.

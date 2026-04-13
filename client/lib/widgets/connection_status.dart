@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../providers/event_provider.dart';
 import '../providers/settings_provider.dart';
 import '../screens/settings_screen.dart';
 
@@ -8,9 +9,32 @@ class ConnectionStatus extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<SettingsProvider>(
-      builder: (context, provider, _) {
-        final connected = provider.config.isConnected;
+    return Consumer2<SettingsProvider, EventProvider>(
+      builder: (context, settings, events, _) {
+        final isTesting = settings.isTesting;
+        final connected = settings.config.isConnected;
+        final pending = events.pendingUploadCount;
+        final failed = events.failedUploadCount;
+
+        String label;
+        Color dotColor;
+        if (isTesting) {
+          label = 'Connecting...';
+          dotColor = Colors.grey;
+        } else if (connected) {
+          label = 'Connected';
+          dotColor = Colors.green;
+        } else {
+          label = 'Offline';
+          dotColor = Colors.red;
+        }
+
+        String badge = '';
+        if (failed > 0) {
+          badge = ' \u00b7 $failed\u2717';
+        } else if (pending > 0) {
+          badge = ' \u00b7 $pending\u2191';
+        }
         return GestureDetector(
           onTap: () => Navigator.push(
             context,
@@ -24,11 +48,11 @@ class ConnectionStatus extends StatelessWidget {
                 Icon(
                   Icons.circle,
                   size: 10,
-                  color: connected ? Colors.green : Colors.red,
+                  color: dotColor,
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  connected ? 'Connected' : 'Offline',
+                  '$label$badge',
                   style: Theme.of(context).textTheme.labelSmall,
                 ),
               ],

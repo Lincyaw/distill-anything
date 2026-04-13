@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/event.dart';
@@ -5,8 +7,9 @@ import '../models/event.dart';
 class EventListItem extends StatelessWidget {
   final Event event;
   final VoidCallback? onTap;
+  final VoidCallback? onRetry;
 
-  const EventListItem({super.key, required this.event, this.onTap});
+  const EventListItem({super.key, required this.event, this.onTap, this.onRetry});
 
   IconData get _typeIcon {
     switch (event.type) {
@@ -67,15 +70,54 @@ class EventListItem extends StatelessWidget {
   String get _subtitle {
     switch (event.type) {
       case EventType.audio:
-        return 'Audio recording';
+        final size = _fileSizeLabel;
+        return size != null ? 'Audio recording  $size' : 'Audio recording';
       case EventType.photo:
-        return 'Photo';
+        final size = _fileSizeLabel;
+        return size != null ? 'Photo  $size' : 'Photo';
       case EventType.video:
-        return 'Video';
+        final size = _fileSizeLabel;
+        return size != null ? 'Video  $size' : 'Video';
       case EventType.text:
         final preview = event.textContent ?? '';
         return preview.length > 60 ? '${preview.substring(0, 60)}...' : preview;
     }
+  }
+
+  String? get _fileSizeLabel {
+    final bytes = event.fileSizeBytes;
+    if (bytes == null) return null;
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  /// Build a thumbnail widget for photo events.
+  Widget _buildLeading() {
+    if (event.type == EventType.photo && event.payloadPath != null) {
+      final file = File(event.payloadPath!);
+      if (file.existsSync()) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.file(
+            file,
+            width: 48,
+            height: 48,
+            fit: BoxFit.cover,
+            cacheWidth: 96, // decode at 2x for sharpness
+            errorBuilder: (_, __, ___) => _buildIconLeading(),
+          ),
+        );
+      }
+    }
+    return _buildIconLeading();
+  }
+
+  Widget _buildIconLeading() {
+    return CircleAvatar(
+      backgroundColor: _typeColor.withAlpha(30),
+      child: Icon(_typeIcon, color: _typeColor),
+    );
   }
 
   @override
@@ -84,10 +126,7 @@ class EventListItem extends StatelessWidget {
     final dateFormat = DateFormat('yyyy-MM-dd');
 
     return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: _typeColor.withAlpha(30),
-        child: Icon(_typeIcon, color: _typeColor),
-      ),
+      leading: _buildLeading(),
       title: Text(
         timeFormat.format(event.timestamp),
         style: Theme.of(context).textTheme.titleSmall,
@@ -104,11 +143,23 @@ class EventListItem extends StatelessWidget {
           ),
         ],
       ),
-      trailing: Icon(
-        _statusIcon,
-        size: 20,
-        color: _statusColor(context),
-      ),
+      trailing: event.uploadStatus == UploadStatus.failed
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(_statusIcon, size: 20, color: Colors.red),
+                IconButton(
+                  icon: const Icon(Icons.refresh, size: 20, color: Colors.red),
+                  tooltip: 'Retry upload',
+                  onPressed: onRetry,
+                ),
+              ],
+            )
+          : Icon(
+              _statusIcon,
+              size: 20,
+              color: _statusColor(context),
+            ),
       onTap: onTap,
     );
   }

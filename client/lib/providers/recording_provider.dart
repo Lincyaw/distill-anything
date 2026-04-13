@@ -5,9 +5,12 @@ import 'package:flutter/foundation.dart';
 
 import '../models/event.dart';
 import '../models/recording_state.dart';
+import 'package:intl/intl.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+
 import '../services/audio_recording_service.dart';
 import '../services/foreground_service.dart';
-import '../services/photo_capture_service.dart';
 import '../services/schedule_service.dart';
 import '../services/video_capture_service.dart';
 import '../services/checksum_service.dart';
@@ -21,7 +24,6 @@ class RecordingProvider extends ChangeNotifier {
 
   // Lazy-initialized services
   AudioRecordingService? _audioService;
-  PhotoCaptureService? _photoService;
   VideoCaptureService? _videoService;
   ScheduleService? _scheduleService;
   final ForegroundServiceManager _foregroundService = ForegroundServiceManager();
@@ -40,11 +42,6 @@ class RecordingProvider extends ChangeNotifier {
   AudioRecordingService get _audio {
     _audioService ??= AudioRecordingService();
     return _audioService!;
-  }
-
-  PhotoCaptureService get _photo {
-    _photoService ??= PhotoCaptureService();
-    return _photoService!;
   }
 
   VideoCaptureService get _video {
@@ -87,8 +84,7 @@ class RecordingProvider extends ChangeNotifier {
           await _startVideoRecording();
           break;
         case RecordingMode.photo:
-          await capturePhoto();
-          return;
+          return; // Photo capture handled by UI via image_picker
         case RecordingMode.text:
           return;
       }
@@ -167,15 +163,15 @@ class RecordingProvider extends ChangeNotifier {
   }
 
   /// Stop the current recording and create an event.
-  Future<Event?> stopRecording() async {
+  Future<Event?> stopRecording({String? annotation}) async {
     Event? event;
 
     switch (_state.mode) {
       case RecordingMode.audio:
-        event = await _stopAudioRecording();
+        event = await _stopAudioRecording(annotation: annotation);
         break;
       case RecordingMode.video:
-        event = await _stopVideoRecording();
+        event = await _stopVideoRecording(annotation: annotation);
         break;
       default:
         break;
@@ -198,21 +194,37 @@ class RecordingProvider extends ChangeNotifier {
     return event;
   }
 
-  Future<Event> _stopAudioRecording() async {
+  Future<Event> _stopAudioRecording({String? annotation}) async {
     final path = await _audio.stopRecording();
-    return _buildFileEvent(path, EventType.audio);
+    return _buildFileEvent(path, EventType.audio, annotation: annotation);
   }
 
-  Future<Event> _stopVideoRecording() async {
+  Future<Event> _stopVideoRecording({String? annotation}) async {
     final path = await _video.stopVideoRecording();
-    return _buildFileEvent(path, EventType.video);
+    return _buildFileEvent(path, EventType.video, annotation: annotation);
   }
 
-  /// Capture a photo and create an event.
-  Future<Event?> capturePhoto({String? annotation}) async {
-    await _photo.init();
-    final path = await _photo.capturePhoto(annotation: annotation);
-    final event = await _buildFileEvent(path, EventType.photo, annotation: annotation);
+  /// Create an event from a file (e.g. from image_picker).
+  /// Copies the file into the app documents directory first.
+  Future<Event?> createEventFromFile(
+      String sourcePath, EventType type, {String? annotation}) async {
+    final dir = await getApplicationDocumentsDirectory();
+    final ts = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+    final ext = type == EventType.photo ? 'jpg' : 'mp4';
+    final prefix = type == EventType.photo ? 'photo' : 'video';
+    final destPath = p.join(dir.path, '${prefix}_$ts.$ext');
+
+    final source = File(sourcePath);
+    try {
+      await source.rename(destPath);
+    } on FileSystemException {
+      await source.copy(destPath);
+      try {
+        await source.delete();
+      } catch (_) {}
+    }
+
+    final event = await _buildFileEvent(destPath, type, annotation: annotation);
     await onEventCreated?.call(event);
     return event;
   }
@@ -285,7 +297,6 @@ class RecordingProvider extends ChangeNotifier {
     _durationSub?.cancel();
     _videoTimer?.cancel();
     _audioService?.dispose();
-    _photoService?.dispose();
     _videoService?.dispose();
     _scheduleService?.dispose();
     _foregroundService.stopForegroundService();

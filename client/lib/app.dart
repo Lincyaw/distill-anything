@@ -66,19 +66,22 @@ class _DistillAnythingAppState extends State<DistillAnythingApp> {
         ChangeNotifierProvider.value(value: _recordingProvider),
         ChangeNotifierProvider.value(value: _uploadProvider),
       ],
-      child: MaterialApp(
-        title: 'Distill Anything',
-        theme: ThemeData(
-          colorSchemeSeed: Colors.indigo,
-          useMaterial3: true,
-          brightness: Brightness.light,
+      child: Consumer<SettingsProvider>(
+        builder: (context, settings, _) => MaterialApp(
+          title: 'Distill Anything',
+          theme: ThemeData(
+            colorSchemeSeed: Colors.indigo,
+            useMaterial3: true,
+            brightness: Brightness.light,
+          ),
+          darkTheme: ThemeData(
+            colorSchemeSeed: Colors.indigo,
+            useMaterial3: true,
+            brightness: Brightness.dark,
+          ),
+          themeMode: settings.themeMode,
+          home: const HomeScreen(),
         ),
-        darkTheme: ThemeData(
-          colorSchemeSeed: Colors.indigo,
-          useMaterial3: true,
-          brightness: Brightness.dark,
-        ),
-        home: const HomeScreen(),
       ),
     );
   }

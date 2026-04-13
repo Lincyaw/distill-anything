@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/settings_provider.dart';
+import '../services/event_storage_service.dart';
 import '../services/storage_manager_service.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -60,20 +61,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _testConnection() async {
+  Future<void> _saveAndTestConnection() async {
     setState(() {
       _isTesting = true;
       _testResult = null;
     });
 
-    // Apply current field values first
-    final provider = context.read<SettingsProvider>();
-    provider.setHost(_hostController.text.trim());
-    final port = int.tryParse(_portController.text.trim());
-    if (port != null) {
-      provider.setPort(port);
-    }
+    // Save settings first, then test.
+    await _saveSettings();
 
+    final provider = context.read<SettingsProvider>();
     final result = await provider.testConnection();
 
     if (mounted) {
@@ -173,7 +170,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: FilledButton.tonalIcon(
-                      onPressed: _isTesting ? null : _testConnection,
+                      onPressed:
+                          _isTesting ? null : _saveAndTestConnection,
                       icon: _isTesting
                           ? const SizedBox(
                               width: 16,
@@ -181,7 +179,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.wifi_find),
-                      label: const Text('Test'),
+                      label: const Text('Save & Test'),
                     ),
                   ),
                 ],
@@ -255,11 +253,76 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                 ),
               ),
+              const SizedBox(height: 12),
+              FilledButton.tonalIcon(
+                onPressed: () => _confirmClearUploaded(context),
+                icon: const Icon(Icons.cleaning_services),
+                label: const Text('Clear uploaded data'),
+              ),
+              const SizedBox(height: 32),
+              Text('Appearance', style: theme.textTheme.titleLarge),
+              const SizedBox(height: 16),
+              SegmentedButton<ThemeMode>(
+                segments: const [
+                  ButtonSegment(
+                    value: ThemeMode.system,
+                    icon: Icon(Icons.brightness_auto),
+                    label: Text('System'),
+                  ),
+                  ButtonSegment(
+                    value: ThemeMode.light,
+                    icon: Icon(Icons.light_mode),
+                    label: Text('Light'),
+                  ),
+                  ButtonSegment(
+                    value: ThemeMode.dark,
+                    icon: Icon(Icons.dark_mode),
+                    label: Text('Dark'),
+                  ),
+                ],
+                selected: {provider.themeMode},
+                onSelectionChanged: (modes) =>
+                    provider.setThemeMode(modes.first),
+              ),
             ],
           );
         },
       ),
     );
+  }
+
+  Future<void> _confirmClearUploaded(BuildContext ctx) async {
+    final confirmed = await showDialog<bool>(
+      context: ctx,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Clear Uploaded Data'),
+        content: const Text(
+          'This will delete all events that have been successfully uploaded to the server. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final eventStorage = EventStorageService();
+      final count = await eventStorage.deleteUploadedEvents();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Cleared $count uploaded events')),
+        );
+        _loadStorageInfo();
+      }
+    }
   }
 
   Widget _storageRow(String label, String value) {

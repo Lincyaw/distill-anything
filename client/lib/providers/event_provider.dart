@@ -64,6 +64,14 @@ class EventProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Count of events pending upload (across all types, ignoring filter).
+  int get pendingUploadCount =>
+      _events.where((e) => e.uploadStatus == UploadStatus.pending).length;
+
+  /// Count of events that failed to upload (across all types, ignoring filter).
+  int get failedUploadCount =>
+      _events.where((e) => e.uploadStatus == UploadStatus.failed).length;
+
   /// Get events that need uploading.
   List<Event> get pendingUpload => _events
       .where((e) =>

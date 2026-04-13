@@ -10,7 +10,7 @@ import 'package:path_provider/path_provider.dart';
 class VideoCaptureService {
   CameraController? _controller;
   List<CameraDescription> _cameras = [];
-  final int _currentCameraIndex = 0;
+  int _currentCameraIndex = 0;
   bool _isInitialized = false;
   bool _isRecording = false;
 
@@ -82,6 +82,13 @@ class VideoCaptureService {
 
   /// Whether video is currently being recorded.
   bool get isRecording => _isRecording;
+
+  /// Switch between front and rear cameras.
+  Future<void> switchCamera() async {
+    if (_cameras.length < 2 || _isRecording) return;
+    _currentCameraIndex = (_currentCameraIndex + 1) % _cameras.length;
+    await _initController(_cameras[_currentCameraIndex]);
+  }
 
   /// Dispose of camera resources.
   Future<void> dispose() async {

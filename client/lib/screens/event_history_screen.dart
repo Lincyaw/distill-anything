@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
 import '../models/event.dart';
 import '../providers/event_provider.dart';
+import '../providers/upload_provider.dart';
 import '../widgets/event_list_item.dart';
 
 class EventHistoryScreen extends StatefulWidget {
@@ -49,6 +50,8 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
       return;
     }
 
+    final dateFormat = DateFormat('yyyy-MM-dd HH:mm:ss');
+
     showDialog(
       context: context,
       builder: (ctx) => Dialog.fullscreen(
@@ -63,15 +66,46 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
                 child: Image.file(File(path)),
               ),
             ),
+            // Top bar with close + info
             Positioned(
-              top: 16,
-              left: 8,
-              child: IconButton(
-                icon: const Icon(Icons.close, color: Colors.white, size: 28),
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.black54,
+              top: 0,
+              left: 0,
+              right: 0,
+              child: SafeArea(
+                child: Container(
+                  color: Colors.black38,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.close,
+                            color: Colors.white, size: 28),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              dateFormat.format(event.timestamp),
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 14),
+                            ),
+                            if (event.fileSizeBytes != null)
+                              Text(
+                                _formatFileSize(event.fileSizeBytes!),
+                                style: const TextStyle(
+                                    color: Colors.white70, fontSize: 12),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                onPressed: () => Navigator.pop(ctx),
               ),
             ),
           ],
@@ -87,25 +121,81 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
       return;
     }
 
-    final player = AudioPlayer();
-    showDialog(
+    final dateFormat = DateFormat('yyyy-MM-dd HH:mm:ss');
+
+    showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Audio Playback'),
-          content: _AudioPlayerWidget(path: path, player: player),
-          actions: [
-            TextButton(
-              onPressed: () {
-                player.stop();
-                Navigator.pop(ctx);
-              },
-              child: const Text('Close'),
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Drag handle
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Theme.of(ctx).colorScheme.onSurfaceVariant.withAlpha(80),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // Header
+                Row(
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: Colors.indigo.withAlpha(30),
+                      child: const Icon(Icons.mic, color: Colors.indigo),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Audio Recording',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 16)),
+                          Text(
+                            dateFormat.format(event.timestamp),
+                            style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(ctx)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (event.fileSizeBytes != null)
+                      Text(
+                        _formatFileSize(event.fileSizeBytes!),
+                        style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                            ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                _AudioPlayerWidget(path: path),
+                const SizedBox(height: 8),
+              ],
             ),
-          ],
+          ),
         );
       },
-    ).then((_) => player.dispose());
+    );
+  }
+
+  String _formatFileSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
   void _showVideoPreview(BuildContext context, Event event) {
@@ -310,16 +400,93 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
             );
           }
 
+          // Build a list of display items: date headers + events.
+          final List<_ListItem> items = [];
+          String? lastDateLabel;
+          final dateFmt = DateFormat('yyyy-MM-dd, EEEE');
+          for (final event in events) {
+            final dateLabel = dateFmt.format(event.timestamp);
+            if (dateLabel != lastDateLabel) {
+              items.add(_DateHeaderItem(dateLabel));
+              lastDateLabel = dateLabel;
+            }
+            items.add(_EventItem(event));
+          }
+
           return RefreshIndicator(
             onRefresh: () => provider.loadEvents(),
             child: ListView.separated(
-              itemCount: events.length,
+              itemCount: items.length,
               separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, index) {
-                final event = events[index];
-                return EventListItem(
-                  event: event,
-                  onTap: () => _showEventPreview(context, event),
+                final item = items[index];
+                if (item is _DateHeaderItem) {
+                  return Container(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surfaceContainerHighest
+                        .withAlpha(120),
+                    child: Text(
+                      item.label,
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  );
+                }
+                final event = (item as _EventItem).event;
+                return Dismissible(
+                  key: ValueKey(event.id),
+                  direction: DismissDirection.endToStart,
+                  background: Container(
+                    color: Colors.red,
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.only(right: 20),
+                    child:
+                        const Icon(Icons.delete, color: Colors.white, size: 28),
+                  ),
+                  confirmDismiss: (_) async {
+                    return await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Delete Event'),
+                        content: const Text(
+                            'Are you sure you want to delete this event? This cannot be undone.'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Cancel'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            style: TextButton.styleFrom(
+                                foregroundColor: Colors.red),
+                            child: const Text('Delete'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                  onDismissed: (_) {
+                    provider.deleteEvent(event.id);
+                  },
+                  child: EventListItem(
+                    event: event,
+                    onTap: () => _showEventPreview(context, event),
+                    onRetry: event.uploadStatus == UploadStatus.failed
+                        ? () async {
+                            await context.read<UploadProvider>().uploadOne(event);
+                            if (context.mounted) {
+                              // Reload from DB to get the actual status set by UploadService
+                              await context.read<EventProvider>().loadEvents();
+                            }
+                          }
+                        : null,
+                  ),
                 );
               },
             ),
@@ -332,9 +499,8 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
 
 class _AudioPlayerWidget extends StatefulWidget {
   final String path;
-  final AudioPlayer player;
 
-  const _AudioPlayerWidget({required this.path, required this.player});
+  const _AudioPlayerWidget({required this.path});
 
   @override
   State<_AudioPlayerWidget> createState() => _AudioPlayerWidgetState();
@@ -348,7 +514,7 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
   @override
   void initState() {
     super.initState();
-    _player = widget.player;
+    _player = AudioPlayer();
     _init();
   }
 
@@ -367,6 +533,7 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
   @override
   void dispose() {
     _player.stop();
+    _player.dispose();
     super.dispose();
   }
 
@@ -489,12 +656,9 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
     _controller = VideoPlayerController.file(File(widget.path));
     _controller.initialize().then((_) {
       setState(() => _isInitialized = true);
-      _controller.play();
+      // Don't auto-play — show first frame, let user tap to play
     }).catchError((e) {
       setState(() => _error = e.toString());
-    });
-    _controller.addListener(() {
-      if (mounted) setState(() {});
     });
   }
 
@@ -508,6 +672,22 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
     final minutes = duration.inMinutes.toString().padLeft(2, '0');
     final seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
     return '$minutes:$seconds';
+  }
+
+  void _togglePlayPause() async {
+    if (_controller.value.isPlaying) {
+      _controller.pause();
+    } else {
+      if (_controller.value.position >= _controller.value.duration) {
+        await _controller.seekTo(Duration.zero);
+      }
+      _controller.play();
+    }
+    setState(() {});
+  }
+
+  void _onTapVideo() {
+    _togglePlayPause();
   }
 
   @override
@@ -524,20 +704,44 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
         else if (!_isInitialized)
           const Center(child: CircularProgressIndicator())
         else
-          Center(
-            child: AspectRatio(
-              aspectRatio: _controller.value.aspectRatio,
-              child: VideoPlayer(_controller),
+          GestureDetector(
+            onTap: _onTapVideo,
+            child: Center(
+              child: AspectRatio(
+                aspectRatio: _controller.value.aspectRatio,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    VideoPlayer(_controller),
+                    // Play icon overlay when paused
+                    if (!_controller.value.isPlaying)
+                      Container(
+                        decoration: const BoxDecoration(
+                          color: Colors.black38,
+                          shape: BoxShape.circle,
+                        ),
+                        padding: const EdgeInsets.all(12),
+                        child: const Icon(Icons.play_arrow,
+                            color: Colors.white, size: 56),
+                      ),
+                  ],
+                ),
+              ),
             ),
           ),
         // Close button
         Positioned(
-          top: 16,
-          left: 8,
-          child: IconButton(
-            icon: const Icon(Icons.close, color: Colors.white, size: 28),
-            style: IconButton.styleFrom(backgroundColor: Colors.black54),
-            onPressed: widget.onClose,
+          top: 0,
+          left: 0,
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                style: IconButton.styleFrom(backgroundColor: Colors.black54),
+                onPressed: widget.onClose,
+              ),
+            ),
           ),
         ),
         // Controls overlay
@@ -545,63 +749,61 @@ class _VideoPlayerWidgetState extends State<_VideoPlayerWidget> {
           Positioned(
             left: 0,
             right: 0,
-            bottom: 32,
-            child: Column(
-              children: [
-                // Play/pause
-                IconButton(
-                  iconSize: 56,
-                  icon: Icon(
-                    _controller.value.isPlaying
-                        ? Icons.pause_circle_filled
-                        : Icons.play_circle_filled,
-                    color: Colors.white,
-                  ),
-                  onPressed: () async {
-                    if (_controller.value.isPlaying) {
-                      _controller.pause();
-                    } else {
-                      if (_controller.value.position >=
-                          _controller.value.duration) {
-                        await _controller.seekTo(Duration.zero);
-                      }
-                      _controller.play();
-                    }
-                  },
-                ),
-                // Progress bar
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      Text(
-                        _formatDuration(_controller.value.position),
-                        style: const TextStyle(color: Colors.white, fontSize: 12),
-                      ),
-                      Expanded(
-                        child: Slider(
-                          max: _controller.value.duration.inMilliseconds
-                              .toDouble()
-                              .clamp(1.0, double.infinity),
-                          value: _controller.value.position.inMilliseconds
-                              .toDouble()
-                              .clamp(0.0, _controller.value.duration.inMilliseconds.toDouble()),
-                          onChanged: (v) {
-                            _controller.seekTo(Duration(milliseconds: v.toInt()));
-                          },
+            bottom: 0,
+            child: SafeArea(
+              child: ValueListenableBuilder<VideoPlayerValue>(
+                valueListenable: _controller,
+                builder: (context, value, _) {
+                  final maxMs =
+                      value.duration.inMilliseconds.toDouble().clamp(1.0, double.infinity);
+                  final posMs =
+                      value.position.inMilliseconds.toDouble().clamp(0.0, maxMs);
+                  return Container(
+                    color: Colors.black38,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Row(
+                      children: [
+                        Text(
+                          _formatDuration(value.position),
+                          style:
+                              const TextStyle(color: Colors.white, fontSize: 12),
                         ),
-                      ),
-                      Text(
-                        _formatDuration(_controller.value.duration),
-                        style: const TextStyle(color: Colors.white, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                        Expanded(
+                          child: Slider(
+                            max: maxMs,
+                            value: posMs,
+                            onChanged: (v) {
+                              _controller
+                                  .seekTo(Duration(milliseconds: v.toInt()));
+                            },
+                          ),
+                        ),
+                        Text(
+                          _formatDuration(value.duration),
+                          style:
+                              const TextStyle(color: Colors.white, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
             ),
           ),
       ],
     );
   }
+}
+
+// Helper types for mixed date-header + event list.
+sealed class _ListItem {}
+
+class _DateHeaderItem extends _ListItem {
+  final String label;
+  _DateHeaderItem(this.label);
+}
+
+class _EventItem extends _ListItem {
+  final Event event;
+  _EventItem(this.event);
 }
