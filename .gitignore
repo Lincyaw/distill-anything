@@ -7,6 +7,12 @@ client/.flutter-plugins-dependencies
 client/pubspec.lock
 *.iml
 
+# Android generated/local
+client/android/.gradle/
+client/android/local.properties
+client/android/.kotlin/
+client/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+
 # Python
 server/.venv/
 server/__pycache__/
