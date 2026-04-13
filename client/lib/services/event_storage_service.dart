@@ -14,12 +14,22 @@ class EventStorageService {
   EventStorageService._internal();
 
   Database? _database;
+  Future<void>? _initFuture;
 
-  /// The underlying database instance. Throws if not initialized.
-  Database get database {
-    if (_database == null) {
-      throw StateError('EventStorageService not initialized. Call init() first.');
+  /// Ensure the database is initialized; safe to call multiple times.
+  Future<void> _ensureInitialized() async {
+    if (_database != null) return;
+    if (_initFuture != null) {
+      await _initFuture;
+      return;
     }
+    _initFuture = init();
+    await _initFuture;
+  }
+
+  /// The underlying database instance. Auto-initializes on first access.
+  Future<Database> get _db async {
+    await _ensureInitialized();
     return _database!;
   }
 
@@ -61,7 +71,8 @@ class EventStorageService {
 
   /// Insert a new event into the database.
   Future<void> insertEvent(Event event) async {
-    await database.insert(
+    final db = await _db;
+    await db.insert(
       'events',
       event.toMap(),
       conflictAlgorithm: ConflictAlgorithm.replace,
@@ -83,7 +94,8 @@ class EventStorageService {
       whereArgs = [filterType.name];
     }
 
-    final maps = await database.query(
+    final db = await _db;
+    final maps = await db.query(
       'events',
       where: where,
       whereArgs: whereArgs,
@@ -97,7 +109,8 @@ class EventStorageService {
 
   /// Retrieve a single event by [id].
   Future<Event?> getEvent(String id) async {
-    final maps = await database.query(
+    final db = await _db;
+    final maps = await db.query(
       'events',
       where: 'id = ?',
       whereArgs: [id],
@@ -110,7 +123,8 @@ class EventStorageService {
 
   /// Update an existing event.
   Future<void> updateEvent(Event event) async {
-    await database.update(
+    final db = await _db;
+    await db.update(
       'events',
       event.toMap(),
       where: 'id = ?',
@@ -120,7 +134,8 @@ class EventStorageService {
 
   /// Update just the upload status for an event.
   Future<void> updateUploadStatus(String id, UploadStatus status) async {
-    await database.update(
+    final db = await _db;
+    await db.update(
       'events',
       {'upload_status': status.name},
       where: 'id = ?',
@@ -130,7 +145,8 @@ class EventStorageService {
 
   /// Retrieve events that need uploading (pending or failed).
   Future<List<Event>> getPendingUploads() async {
-    final maps = await database.query(
+    final db = await _db;
+    final maps = await db.query(
       'events',
       where: 'upload_status = ? OR upload_status = ?',
       whereArgs: [UploadStatus.pending.name, UploadStatus.failed.name],
@@ -142,7 +158,8 @@ class EventStorageService {
 
   /// Delete an event by its [id].
   Future<void> deleteEvent(String id) async {
-    await database.delete(
+    final db = await _db;
+    await db.delete(
       'events',
       where: 'id = ?',
       whereArgs: [id],
@@ -151,13 +168,15 @@ class EventStorageService {
 
   /// Get the total count of events.
   Future<int> getEventCount() async {
-    final result = await database.rawQuery('SELECT COUNT(*) as cnt FROM events');
+    final db = await _db;
+    final result = await db.rawQuery('SELECT COUNT(*) as cnt FROM events');
     return Sqflite.firstIntValue(result) ?? 0;
   }
 
   /// Get the total storage used in bytes (sum of file_size_bytes).
   Future<int> getTotalStorageBytes() async {
-    final result = await database.rawQuery(
+    final db = await _db;
+    final result = await db.rawQuery(
       'SELECT COALESCE(SUM(file_size_bytes), 0) as total FROM events',
     );
     final total = result.first['total'];
